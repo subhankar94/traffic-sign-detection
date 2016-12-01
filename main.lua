@@ -3,8 +3,8 @@ require 'optim'
 require 'os'
 require 'optim'
 require 'xlua'
--- require 'cunn'
--- require 'cudnn' -- faster convolutions
+require 'cunn'
+require 'cudnn' -- faster convolutions
 
 --[[
 --  Hint:  Plot as much as you can.  
@@ -110,9 +110,11 @@ testDataset = tnt.ListDataset{
 -- Hint:  Use :cuda to convert your model to use GPUs
 --]]
 local model = require("models/".. opt.model)
+model:cuda()
 local engine = tnt.OptimEngine()
 local meter = tnt.AverageValueMeter()
 local criterion = nn.CrossEntropyCriterion()
+criterion:cuda()
 local clerr = tnt.ClassErrorMeter{topk = {1}}
 local timer = tnt.TimeMeter()
 local batch = 1
@@ -137,6 +139,14 @@ end
 --]]
 -- engine.hooks.onSample = function(state)
 -- end
+
+engine.hooks.onSample = function(state)
+  local igpu, tgpu = torch.CudaTensor(), torch.CudaTensor()
+  igpu:resize(state.sample.input:size()):copy(state.sample.input)
+  tgpu:resize(state.sample.target:size()):copy(state.sample.target)
+  state.sample.input = igpu
+  state.sample.target = tgpu
+end
 
 engine.hooks.onForwardCriterion = function(state)
     meter:add(state.criterion.output)
