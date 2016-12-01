@@ -8,7 +8,7 @@ local Avg = nn.SpatialAveragePooling
 local View = nn.View
 local Linear = nn.Linear
 local Concat = nn.DepthConcat
-
+local Dropout = nn.Dropout
 
 local function inception(input_planes, c1_planes, c3_planes, c5_planes, p_planes, package)
 
@@ -74,6 +74,7 @@ model:add(Max(2, 2, 2, 2)) -- 832 * 14 * 14 --> 832 * 7 * 7
 model:add(inception(832, 384, {192, 384}, {48, 128}, 128, package)) -- 832 * 7 * 7 --> 1024 * 7 * 7
 model:add(Avg(7, 7, 1, 1)) -- 1024 * 7 * 7 --> 1024 * 1 * 1
 model:add(View(1024))
+model:add(Dropout(0.4))
 model:add(Linear(1024, 64))
 model:add(ReLU())
 model:add(Linear(64, 43))
