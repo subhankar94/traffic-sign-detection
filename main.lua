@@ -63,24 +63,26 @@ function getIterator(dataset)
     --[[
     -- Hint:  Use ParallelIterator for using multiple CPU cores
     --]]
-    --[[
+    --
     return tnt.DatasetIterator{
         dataset = tnt.BatchDataset{
             batchsize = opt.batchsize,
             dataset = dataset
         }
     }
-    --]]
+    --
+    --[[
     return tnt.ParallelDatasetIterator{
-      nthread = 9,
-      init    = function() require 'torchnet' end
+      nthread = 8,
+      init    = function() require 'torchnet' end,
       closure = function()
         return tnt.BatchDataset{
           batchsize = opt.batchsize,
           dataset   = dateset
         }
-      end,
+      end
     }
+    --]]
 end
 
 local trainData = torch.load(DATA_PATH..'train.t7')
@@ -100,7 +102,7 @@ trainDataset = tnt.SplitDataset{
             list = torch.range(1, trainData:size(1)):long(),
             load = function(idx)
                 return {
-                    input =  getTrainSample(trainData, idx),
+                    input  = getTrainSample(trainData, idx),
                     target = getTrainLabel(trainData, idx)
                 }
             end
@@ -112,8 +114,10 @@ testDataset = tnt.ListDataset{
     list = torch.range(1, testData:size(1)):long(),
     load = function(idx)
         return {
-            input = getTestSample(testData, idx),
-            sampleId = torch.LongTensor{testData[idx][1]}
+            input  = getTestSample(testData, idx),
+            --sampleId = torch.LongTensor{testData[idx][1]}
+            target = torch.LongTensor{testData[idx][1]}
+     
         }
     end
 }
@@ -211,7 +215,8 @@ batch = 1
 --  file that has to be uploaded in kaggle.
 --]]
 engine.hooks.onForward = function(state)
-    local fileNames  = state.sample.sampleId
+    -- local fileNames  = state.sample.sampleId
+    local fileNames  = state.sample.target
     local _, pred = state.network.output:max(2)
     pred = pred - 1
     for i = 1, pred:size(1) do
