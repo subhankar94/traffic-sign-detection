@@ -111,11 +111,11 @@ testDataset = tnt.ListDataset{
 -- Hint:  Use :cuda to convert your model to use GPUs
 --]]
 local model = require("models/".. opt.model)
-model:cuda()
+--model:cuda()
 local engine = tnt.OptimEngine()
 local meter = tnt.AverageValueMeter()
 local criterion = nn.CrossEntropyCriterion()
-criterion:cuda()
+--criterion:cuda()
 local clerr = tnt.ClassErrorMeter{topk = {1}}
 local timer = tnt.TimeMeter()
 local batch = 1
@@ -138,16 +138,16 @@ end
 -- Hint:  Use onSample function to convert to 
 --        cuda tensor for using GPU
 --]]
--- engine.hooks.onSample = function(state)
--- end
 
 engine.hooks.onSample = function(state)
   local igpu, tgpu = torch.CudaTensor(), torch.CudaTensor()
   igpu:resize(state.sample.input:size()):copy(state.sample.input)
   tgpu:resize(state.sample.target:size()):copy(state.sample.target)
+  print(tgpu:size())
   state.sample.input = igpu
   state.sample.target = tgpu
 end
+
 
 engine.hooks.onForwardCriterion = function(state)
     meter:add(state.criterion.output)
@@ -212,7 +212,7 @@ engine.hooks.onForward = function(state)
     batch = batch + 1
 end
 
-dbg()
+--dbg()
 
 engine.hooks.onEnd = function(state)
     submission:close()
