@@ -63,11 +63,23 @@ function getIterator(dataset)
     --[[
     -- Hint:  Use ParallelIterator for using multiple CPU cores
     --]]
+    --[[
     return tnt.DatasetIterator{
         dataset = tnt.BatchDataset{
             batchsize = opt.batchsize,
             dataset = dataset
         }
+    }
+    --]]
+    return tnt.ParallelDatasetIterator{
+      nthread = 9,
+      init    = function() require 'torchnet' end
+      closure = function()
+        return tnt.BatchDataset{
+          batchsize = opt.batchsize,
+          dataset   = dateset
+        }
+      end,
     }
 end
 
@@ -107,20 +119,17 @@ testDataset = tnt.ListDataset{
 }
 
 
---[[
--- Hint:  Use :cuda to convert your model to use GPUs
---]]
 local model = require("models/".. opt.model)
---model:cuda()
+model:cuda()
 local engine = tnt.OptimEngine()
 local meter = tnt.AverageValueMeter()
 local criterion = nn.CrossEntropyCriterion()
---criterion:cuda()
+criterion:cuda()
 local clerr = tnt.ClassErrorMeter{topk = {1}}
 local timer = tnt.TimeMeter()
 local batch = 1
 
--- print(model)
+print(model)
 
 engine.hooks.onStart = function(state)
     meter:reset()
@@ -134,18 +143,18 @@ engine.hooks.onStart = function(state)
     end
 end
 
---[[
--- Hint:  Use onSample function to convert to 
---        cuda tensor for using GPU
---]]
 
+local input  = torch.CudaTensor()
+local target = torch.CudaTensor()
 engine.hooks.onSample = function(state)
-  local igpu, tgpu = torch.CudaTensor(), torch.CudaTensor()
-  igpu:resize(state.sample.input:size()):copy(state.sample.input)
-  tgpu:resize(state.sample.target:size()):copy(state.sample.target)
-  print(tgpu:size())
-  state.sample.input = igpu
-  state.sample.target = tgpu
+  input:resize(
+      state.sample.input:size()
+  ):copy(state.sample.input)
+  target:resize(
+      state.sample.target:size()
+  ):copy(state.sample.target)
+  state.sample.input  = input
+  state.sample.target = target
 end
 
 
