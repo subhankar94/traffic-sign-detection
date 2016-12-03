@@ -15,6 +15,7 @@ local tnt = require 'torchnet'
 local image = require 'image'
 local optParser = require 'opts'
 local opt = optParser.parse(arg)
+local dbg = require "debugger"
 
 local WIDTH, HEIGHT = 32, 32
 local DATA_PATH = (opt.data ~= '' and opt.data or './data/')
@@ -210,6 +211,8 @@ engine.hooks.onForward = function(state)
     xlua.progress(batch, state.iterator.dataset:size())
     batch = batch + 1
 end
+
+dbg()
 
 engine.hooks.onEnd = function(state)
     submission:close()
