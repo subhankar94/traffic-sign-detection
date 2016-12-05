@@ -92,6 +92,8 @@ local classCounts = torch.zeros(43)
 for i = 1, trainData:size(1) do
   classCounts[trainData[i][9]+1] = classCounts[trainData[i][9]+1] + 1
 end
+local finalWeights = torch.div(classCounts, torch.sum(classCounts))
+local weights = torch.Tensor(43):fill(1/43)
 
 trainDataset = tnt.SplitDataset{
     partitions = {train=0.9, val=0.1},
@@ -102,7 +104,7 @@ trainDataset = tnt.SplitDataset{
     --  and then slowly converges to the actual distribution 
     --  in later stages of training.
     --]]
-    --
+    --[[
     dataset = tnt.ShuffleDataset{
         dataset = tnt.ListDataset{
             list = torch.range(1, trainData:size(1)):long(),
@@ -114,8 +116,8 @@ trainDataset = tnt.SplitDataset{
             end
         }
     }
+    --]]
     --
-    --[[
     dataset = tnt.ResampleDataset{
         dataset = tnt.ListDataset{
             list = torch.range(1, trainData:size(1)):long(),
@@ -125,7 +127,17 @@ trainDataset = tnt.SplitDataset{
                     target = getTrainLabel(trainData, idx)
                 }
             end
-        }
+        },
+        sampler = function(index, epoch)
+          currentWeights = torch.mul(weights, 0.8^epoch) + torch.mul(finalWeights, 1-(0.8^epoch))
+          local getClass = function()
+            return torch.multinomial(currentWeights, 1)[1]
+          end
+          return function()
+            local label = index.labels[getClass()]
+            return index.itemAt(torch.random(1, index.itemCount(label)), label)
+          end
+        end
     }
     --]]
 }
@@ -201,8 +213,9 @@ engine.hooks.onEnd = function(state)
 end
 
 local epoch = 1
+local maxEpochs = opt.nEpochs
 
-while epoch <= opt.nEpochs do
+while epoch <= maxEpochs do
     trainDataset:select('train')
     engine:train{
         network = model,
