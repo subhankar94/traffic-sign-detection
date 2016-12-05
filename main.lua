@@ -102,7 +102,7 @@ trainDataset = tnt.SplitDataset{
     --  and then slowly converges to the actual distribution 
     --  in later stages of training.
     --]]
-    --[[
+    --
     dataset = tnt.ShuffleDataset{
         dataset = tnt.ListDataset{
             list = torch.range(1, trainData:size(1)):long(),
@@ -114,7 +114,8 @@ trainDataset = tnt.SplitDataset{
             end
         }
     }
-    --]]
+    --
+    --[[
     dataset = tnt.ResampleDataset{
         dataset = tnt.ListDataset{
             list = torch.range(1, trainData:size(1)):long(),
@@ -125,6 +126,8 @@ trainDataset = tnt.SplitDataset{
                 }
             end
         }
+    }
+    --]]
 }
 
 testDataset = tnt.ListDataset{
