@@ -15,6 +15,7 @@ local tnt = require 'torchnet'
 local image = require 'image'
 local optParser = require 'opts'
 local opt = optParser.parse(arg)
+local opts = opt
 local dbg = require "debugger"
 
 local WIDTH, HEIGHT = 32, 32
@@ -63,23 +64,27 @@ function getIterator(dataset)
     --[[
     -- Hint:  Use ParallelIterator for using multiple CPU cores
     --]]
-    --
+    --[[
     return tnt.DatasetIterator{
         dataset = tnt.BatchDataset{
             batchsize = opt.batchsize,
             dataset = dataset
         }
     }
+    --]]
     --
-    --[[
     return tnt.ParallelDatasetIterator{
       nthread = 8,
-      init    = function() require 'torchnet' end,
-      closure = function()
-        return tnt.BatchDataset{
-          batchsize = opt.batchsize,
-          dataset   = dateset
-        }
+      init    = function() 
+          local tnt = require 'torchnet' 
+          local image = require 'image'
+          local opts = opt
+      end,
+      closure = function() 
+          return tnt.DatasetIterator{
+              batchsize = opt.batchsize,
+              dataset = dataset
+          }
       end
     }
     --]]
