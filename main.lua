@@ -104,7 +104,7 @@ trainDataset = tnt.SplitDataset{
     --  and then slowly converges to the actual distribution 
     --  in later stages of training.
     --]]
-    --[[
+    --
     dataset = tnt.ShuffleDataset{
         dataset = tnt.ListDataset{
             list = torch.range(1, trainData:size(1)):long(),
@@ -116,8 +116,8 @@ trainDataset = tnt.SplitDataset{
             end
         }
     }
-    --]]
     --
+    --[[
     dataset = tnt.ResampleDataset{
         dataset = tnt.ListDataset{
             list = torch.range(1, trainData:size(1)):long(),
@@ -128,7 +128,7 @@ trainDataset = tnt.SplitDataset{
                 }
             end
         },
-        sampler = function(index, epoch)
+        sampler = function(dataset, idx)
           currentWeights = torch.mul(weights, 0.8^epoch) + torch.mul(finalWeights, 1-(0.8^epoch))
           local getClass = function()
             return torch.multinomial(currentWeights, 1)[1]
