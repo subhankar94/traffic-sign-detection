@@ -17,7 +17,7 @@ local optParser = require 'opts'
 local opt = optParser.parse(arg)
 local dbg = require "debugger"
 
-local WIDTH, HEIGHT = 32, 32
+local WIDTH, HEIGHT = 64, 64
 local DATA_PATH = (opt.data ~= '' and opt.data or './data/')
 
 torch.setdefaulttensortype('torch.DoubleTensor')
@@ -72,7 +72,7 @@ function getIterator(dataset)
  
 end
 
-function prune_dataset(dataset, epoch, maxepochs, largest, smallest)
+function prune_dataset(data, epoch, maxepochs, largest, smallest)
     -- create dummy dataset by pruning
     -- start with every class having `smallest` number of instances
     -- and for every epoch reconstruct with max = s + (l-s)*(2(e-1)/n)
@@ -83,12 +83,13 @@ function prune_dataset(dataset, epoch, maxepochs, largest, smallest)
         local resampled = {}
         local class_counts = torch.zeros(43)
         local curr
-        for idx = 1, dataset:size() do
-            curr = dataset:get(idx)
-            if class_counts[curr.target] < max then
-                table.insert(resampled, curr)
+        for idx, val in ipairs(data) do
+            if class_counts[val[9]] < max then
+                table.insert(resampled, val)
+                class_counts[val[9]] += 1
             end
         end
+        return resampled
     end
 end
 
@@ -99,11 +100,10 @@ local classCounts = torch.zeros(43)
 for i = 1, trainData:size(1) do
   classCounts[trainData[i][9]+1] = classCounts[trainData[i][9]+1] + 1
 end
-local finalWeights = torch.div(classCounts, torch.sum(classCounts))
-local weights = torch.Tensor(43):fill(1/43)
-local largest = torch.max(classCounts)
-local smallest  = torch.min(classCounts)
+--local finalWeights = torch.div(classCounts, torch.sum(classCounts))
+local largest, smallest = torch.max(classCounts), torch.min(classCounts)
 
+--[[
 trainDataset = tnt.SplitDataset{
     partitions = {train=0.9, val=0.1},
     initialpartition = 'train',
@@ -119,6 +119,7 @@ trainDataset = tnt.SplitDataset{
         }
     }
 }
+--]]
 
 testDataset = tnt.ListDataset{
     list = torch.range(1, testData:size(1)):long(),
@@ -193,12 +194,30 @@ local epoch = 1
 local maxEpochs = opt.nEpochs
 local dset
 while epoch <= maxEpochs do
+    
+    dset = prune_dataset(trainData, epoch, maxEpochs, largest, smallest)
+ 
+    trainDataset = tnt.SplitDataset{
+        partitions = {train=0.9, val=0.1},
+        initialpartition = 'train',
+        dataset = tnt.ShuffleDataset{
+            dataset = tnt.ListDataset{
+                list = torch.range(1, dset:size(1)):long(),
+                load = function(idx)
+                    return {
+                        input  = getTrainSample(trainData, idx),
+                        target = getTrainLabel(trainData, idx)
+                    }
+                end
+            }
+        }
+    }
+  
     trainDataset:select('train')
-    dset = prune_dataset(trainDataset:select('train'), epoch, maxEpochs, largest, smallest)
     engine:train{
         network = model,
         criterion = criterion,
-        iterator = getIterator(dset),
+        iterator = getIterator(trainDataset),
         optimMethod = optim.sgd,
         maxepoch = 1,
         config = {
