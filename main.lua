@@ -64,15 +64,15 @@ function getIterator(dataset)
     --[[
     -- Hint:  Use ParallelIterator for using multiple CPU cores
     --]]
-    --[[
+    --
     return tnt.DatasetIterator{
         dataset = tnt.BatchDataset{
             batchsize = opt.batchsize,
             dataset = dataset
         }
     }
-    --]]
     --
+    --[[
     return tnt.ParallelDatasetIterator{
       nthread = 8,
       init    = function() 
@@ -121,30 +121,6 @@ trainDataset = tnt.SplitDataset{
             end
         }
     }
-    --
-    --[[
-    dataset = tnt.ResampleDataset{
-        dataset = tnt.ListDataset{
-            list = torch.range(1, trainData:size(1)):long(),
-            load = function(idx)
-                return {
-                    input  = getTrainSample(trainData, idx),
-                    target = getTrainLabel(trainData, idx)
-                }
-            end
-        },
-        sampler = function(dataset, idx)
-          currentWeights = torch.mul(weights, 0.8^epoch) + torch.mul(finalWeights, 1-(0.8^epoch))
-          local getClass = function()
-            return torch.multinomial(currentWeights, 1)[1]
-          end
-          return function()
-            local label = index.labels[getClass()]
-            return index.itemAt(torch.random(1, index.itemCount(label)), label)
-          end
-        end
-    }
-    --]]
 }
 
 testDataset = tnt.ListDataset{
@@ -152,7 +128,6 @@ testDataset = tnt.ListDataset{
     load = function(idx)
         return {
             input  = getTestSample(testData, idx),
-            --sampleId = torch.LongTensor{testData[idx][1]}
             target = torch.LongTensor{testData[idx][1]}
      
         }
@@ -222,6 +197,7 @@ local maxEpochs = opt.nEpochs
 
 while epoch <= maxEpochs do
     trainDataset:select('train')
+    print(type(trainDataset))
     engine:train{
         network = model,
         criterion = criterion,
@@ -253,7 +229,6 @@ batch = 1
 --  file that has to be uploaded in kaggle.
 --]]
 engine.hooks.onForward = function(state)
-    -- local fileNames  = state.sample.sampleId
     local fileNames  = state.sample.target
     local _, pred = state.network.output:max(2)
     pred = pred - 1

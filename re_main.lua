@@ -17,7 +17,7 @@ local optParser = require 'opts'
 local opt = optParser.parse(arg)
 local dbg = require "debugger"
 
-local WIDTH, HEIGHT = 64, 64
+local WIDTH, HEIGHT = 32, 32
 local DATA_PATH = (opt.data ~= '' and opt.data or './data/')
 
 torch.setdefaulttensortype('torch.DoubleTensor')
@@ -59,38 +59,64 @@ function getTestSample(dataset, idx)
     return transformInput(image.load(file))
 end
 
-function getIterator(dataset)
-    local dset = tnt.BatchDataset{
-            batchsize = opt.batchsize
-            dataset = dataset
-    }
-    return tnt.ParallelDatasetIterator{
-        nthread = 8,
-        init    = function() require 'torchnet' end,
-        closure = function() return dset end
-    }
- 
+function getIterator(dataset, train, pruned)
+    
+    if not train then 
+        iterator = tnt.DatasetIterator{
+                      dataset = tnt.BatchDataset{
+                          batchsize = opt.batchsize,
+                          dataset   = dataset
+                      }
+                   }
+    else
+        permed   = torch.randperm(#pruned)
+        iterator = tnt.DatasetIterator{
+                      dataset = tnt.BatchDataset{
+                          batchsize = opt.batchsize,
+                          dataset   = tnt.ResampleDataset{
+                              dataset = dataset, 
+                              size    = #pruned,
+                              sampler = function(dataset, idx)
+                                            return pruned[permed[idx]]
+                                        end
+                          }
+                      }
+                   }
+    end
+    return iterator
 end
 
-function prune_dataset(data, epoch, maxepochs, largest, smallest)
-    -- create dummy dataset by pruning
-    -- start with every class having `smallest` number of instances
-    -- and for every epoch reconstruct with max = s + (l-s)*(2(e-1)/n)
-    local max = smallest + (largest-smallest)*(2*(epoch-1)/maxepochs)
-    if epoch > torch.floor(maxepochs/2) or max > largest then
-        return dataset
-    else
-        local resampled = {}
-        local class_counts = torch.zeros(43)
-        local curr
-        for idx, val in ipairs(data) do
-            if class_counts[val[9]] < max then
-                table.insert(resampled, val)
-                class_counts[val[9]] += 1
-            end
+function prune_dataset(data, trainData, epoch, maxepochs, largest, smallest)
+    -- create dummy dataset that gradually approaches final distribution
+    local max = largest * ((maxepochs-epoch)/maxepochs)
+    -- make list of images by class
+    local indices = data.__dataset.__perm
+    local by_class = {}
+    local current_label
+    for i = 1, data.__partitionsizes[1] do -- train partition
+        current_label = getTrainLabel(trainData, indices[i])[1]
+        if by_class[current_label] == nil then
+            by_class[current_label] = {i}
+        else
+            table.insert(by_class[current_label], i)
         end
-        return resampled
     end
+    -- build dummy dataset
+    pruned = {}
+    for class, images in pairs(by_class) do
+        
+        for idx, image in ipairs(images) do
+            table.insert(pruned, image)
+        end
+        
+        local class_pop = #images
+
+        while class_pop < max do
+            table.insert(pruned, images[torch.random(#images)])
+            class_pop = class_pop + 1
+        end
+    end
+    return pruned
 end
 
 local trainData = torch.load(DATA_PATH..'train.t7')
@@ -103,7 +129,6 @@ end
 --local finalWeights = torch.div(classCounts, torch.sum(classCounts))
 local largest, smallest = torch.max(classCounts), torch.min(classCounts)
 
---[[
 trainDataset = tnt.SplitDataset{
     partitions = {train=0.9, val=0.1},
     initialpartition = 'train',
@@ -119,7 +144,6 @@ trainDataset = tnt.SplitDataset{
         }
     }
 }
---]]
 
 testDataset = tnt.ListDataset{
     list = torch.range(1, testData:size(1)):long(),
@@ -143,7 +167,7 @@ local clerr = tnt.ClassErrorMeter{topk = {1}}
 local timer = tnt.TimeMeter()
 local batch = 1
 
-print(model)
+--print(model)
 
 engine.hooks.onStart = function(state)
     meter:reset()
@@ -192,35 +216,17 @@ end
 
 local epoch = 1
 local maxEpochs = opt.nEpochs
-local dset
 while epoch <= maxEpochs do
     
-    dset = prune_dataset(trainData, epoch, maxEpochs, largest, smallest)
- 
-    trainDataset = tnt.SplitDataset{
-        partitions = {train=0.9, val=0.1},
-        initialpartition = 'train',
-        dataset = tnt.ShuffleDataset{
-            dataset = tnt.ListDataset{
-                list = torch.range(1, dset:size(1)):long(),
-                load = function(idx)
-                    return {
-                        input  = getTrainSample(trainData, idx),
-                        target = getTrainLabel(trainData, idx)
-                    }
-                end
-            }
-        }
-    }
-  
     trainDataset:select('train')
+    pruned = prune_dataset(trainDataset, trainData, epoch, maxEpochs, largest, smallest)
     engine:train{
-        network = model,
-        criterion = criterion,
-        iterator = getIterator(trainDataset),
+        network     = model,
+        criterion   = criterion,
+        iterator    = getIterator(trainDataset, true, pruned),
         optimMethod = optim.sgd,
-        maxepoch = 1,
-        config = {
+        maxepoch    = 1,
+        config      = {
             learningRate = opt.LR,
             momentum = opt.momentum
         }
@@ -228,9 +234,9 @@ while epoch <= maxEpochs do
 
     trainDataset:select('val')
     engine:test{
-        network = model,
+        network   = model,
         criterion = criterion,
-        iterator = getIterator(trainDataset)
+        iterator  = getIterator(trainDataset, false, nil)
     }
     print('Done with Epoch '..tostring(epoch))
     epoch = epoch + 1
@@ -245,9 +251,9 @@ batch = 1
 --  file that has to be uploaded in kaggle.
 --]]
 engine.hooks.onForward = function(state)
-    local fileNames  = state.sample.target
-    local _, pred = state.network.output:max(2)
-    pred = pred - 1
+    local fileNames    = state.sample.target
+    local _, pred      = state.network.output:max(2)
+    pred               = pred - 1
     for i = 1, pred:size(1) do
         submission:write(string.format("%05d,%d\n", fileNames[i][1], pred[i][1]))
     end
@@ -255,15 +261,14 @@ engine.hooks.onForward = function(state)
     batch = batch + 1
 end
 
---dbg()
 
 engine.hooks.onEnd = function(state)
     submission:close()
 end
 
 engine:test{
-    network = model,
-    iterator = getIterator(testDataset)
+    network  = model,
+    iterator = getIterator(testDataset, false, nil)
 }
 
 print("The End!")
