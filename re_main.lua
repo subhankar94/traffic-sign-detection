@@ -17,7 +17,7 @@ local optParser = require 'opts'
 local opt = optParser.parse(arg)
 local dbg = require "debugger"
 
-local WIDTH, HEIGHT = 32, 32
+local WIDTH, HEIGHT = 40, 40
 local DATA_PATH = (opt.data ~= '' and opt.data or './data/')
 
 torch.setdefaulttensortype('torch.DoubleTensor')
@@ -42,7 +42,7 @@ function transformInput(inp)
     return f(inp)
 end
 
-function getTrainSample(dataset, idx)
+function getTrainSample(dataset, idx, DATA_PATH)
     r = dataset[idx]
     classId, track, file = r[9], r[1], r[2]
     file = string.format("%05d/%05d_%05d.ppm", classId, track, file)
@@ -59,19 +59,19 @@ function getTestSample(dataset, idx)
     return transformInput(image.load(file))
 end
 
-function getIterator(dataset, train, pruned)
-    
+function getIterator(dataset, train, pruned, permed)
+   
+    local dset
     if not train then 
-        iterator = tnt.DatasetIterator{
-                      dataset = tnt.BatchDataset{
+        --iterator = tnt.DatasetIterator{
+                      dset = tnt.BatchDataset{
                           batchsize = opt.batchsize,
                           dataset   = dataset
                       }
-                   }
+        --           }
     else
-        permed   = torch.randperm(#pruned)
-        iterator = tnt.DatasetIterator{
-                      dataset = tnt.BatchDataset{
+        --iterator = tnt.DatasetIterator{
+                      dset = tnt.BatchDataset{
                           batchsize = opt.batchsize,
                           dataset   = tnt.ResampleDataset{
                               dataset = dataset, 
@@ -81,9 +81,25 @@ function getIterator(dataset, train, pruned)
                                         end
                           }
                       }
-                   }
+        --           }
     end
-    return iterator
+    --[[
+    return tnt.ParallelDatasetIterator {
+              nthread = 16,
+              init    = function() 
+                            local tnt    = require 'torchnet'
+                            local image  = require 'image'
+                            local opt    = opt
+                            local DATA_PATH = DATA_PATH
+                            local train  = train
+                            local pruned = pruned
+                            local permed = permed
+                            local utils  = require 'utils'
+                        end,
+              closure = function() return dset end
+           }
+    --]]
+    return tnt.DatasetIterator{dataset = dset}
 end
 
 function prune_dataset(data, trainData, epoch, maxepochs, largest, smallest)
@@ -126,7 +142,6 @@ local classCounts = torch.zeros(43)
 for i = 1, trainData:size(1) do
   classCounts[trainData[i][9]+1] = classCounts[trainData[i][9]+1] + 1
 end
---local finalWeights = torch.div(classCounts, torch.sum(classCounts))
 local largest, smallest = torch.max(classCounts), torch.min(classCounts)
 
 trainDataset = tnt.SplitDataset{
@@ -137,7 +152,7 @@ trainDataset = tnt.SplitDataset{
             list = torch.range(1, trainData:size(1)):long(),
             load = function(idx)
                 return {
-                    input  = getTrainSample(trainData, idx),
+                    input  = getTrainSample(trainData, idx, DATA_PATH),
                     target = getTrainLabel(trainData, idx)
                 }
             end
@@ -167,7 +182,7 @@ local clerr = tnt.ClassErrorMeter{topk = {1}}
 local timer = tnt.TimeMeter()
 local batch = 1
 
---print(model)
+print(model)
 
 engine.hooks.onStart = function(state)
     meter:reset()
@@ -203,7 +218,7 @@ engine.hooks.onForwardCriterion = function(state)
         print(string.format("%s Batch: %d/%d; avg. loss: %2.4f; avg. error: %2.4f",
                 mode, batch, state.iterator.dataset:size(), meter:value(), clerr:value{k = 1}))
     else
-        xlua.progress(batch, state.iterator.dataset:size())
+        xlua.progress(batch, total_batches)
     end
     batch = batch + 1 -- batch increment has to happen here to work for train, val and test.
     timer:incUnit()
@@ -220,10 +235,12 @@ while epoch <= maxEpochs do
     
     trainDataset:select('train')
     pruned = prune_dataset(trainDataset, trainData, epoch, maxEpochs, largest, smallest)
+    permed = torch.randperm(#pruned)
+    total_batches = torch.floor(#pruned/opt.batchsize)
     engine:train{
         network     = model,
         criterion   = criterion,
-        iterator    = getIterator(trainDataset, true, pruned),
+        iterator    = getIterator(trainDataset, true, pruned, permed),
         optimMethod = optim.sgd,
         maxepoch    = 1,
         config      = {
@@ -233,10 +250,11 @@ while epoch <= maxEpochs do
     }
 
     trainDataset:select('val')
+    total_batches = torch.floor(trainDataset:size()/opt.batchsize)
     engine:test{
         network   = model,
         criterion = criterion,
-        iterator  = getIterator(trainDataset, false, nil)
+        iterator  = getIterator(trainDataset, false, nil, nil)
     }
     print('Done with Epoch '..tostring(epoch))
     epoch = epoch + 1
@@ -257,7 +275,7 @@ engine.hooks.onForward = function(state)
     for i = 1, pred:size(1) do
         submission:write(string.format("%05d,%d\n", fileNames[i][1], pred[i][1]))
     end
-    xlua.progress(batch, state.iterator.dataset:size())
+    xlua.progress(batch, 100)
     batch = batch + 1
 end
 
@@ -268,7 +286,7 @@ end
 
 engine:test{
     network  = model,
-    iterator = getIterator(testDataset, false, nil)
+    iterator = getIterator(testDataset, false, nil, nil)
 }
 
 print("The End!")
