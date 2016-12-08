@@ -26,11 +26,11 @@ end
 --]]
 function transformInput(inp)
     f = tnt.transform.compose{
-        [1] = shift,
-        [2] = rotate,
-        [3] = scale,
-        [4] = function(x) return image.rgb2yuv(x) end,
-        [5] = resize
+        --[1] = shift,
+        --[2] = rotate,
+        --[3] = scale,
+        [1] = function(x) return image.rgb2yuv(x) end,
+        [2] = resize
     }
     return f(inp)
 end
