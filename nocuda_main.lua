@@ -3,9 +3,8 @@ require 'optim'
 require 'os'
 require 'optim'
 require 'xlua'
-require 'cunn'
-require 'cudnn' -- faster convolutions
---require 'cutorch'
+--require 'cunn'
+--require 'cudnn' -- faster convolutions
 
 --[[
 --  Hint:  Plot as much as you can.  
@@ -141,11 +140,11 @@ testDataset = tnt.ListDataset{
 
 
 local model = require("models/".. opt.model)
-model:cuda()
+--model:cuda()
 local engine = tnt.OptimEngine()
 local meter = tnt.AverageValueMeter()
 local criterion = nn.CrossEntropyCriterion()
-criterion:cuda()
+--criterion:cuda()
 local clerr = tnt.ClassErrorMeter{topk = {1}}
 local timer = tnt.TimeMeter()
 local batch = 1
@@ -164,7 +163,7 @@ engine.hooks.onStart = function(state)
     end
 end
 
---
+--[[
 local input  = torch.CudaTensor()
 local target = torch.CudaTensor()
 engine.hooks.onSample = function(state)
@@ -192,9 +191,11 @@ engine.hooks.onForwardCriterion = function(state)
     timer:incUnit()
 end
 
+local error_logs = {}
 engine.hooks.onEnd = function(state)
     print(string.format("%s: avg. loss: %2.4f; avg. error: %2.4f, time: %2.4f",
     mode, meter:value(), clerr:value{k = 1}, timer:value()))
+    table.insert(error_logs, meter:value())
 end
 
 local epoch = 1
@@ -259,5 +260,6 @@ engine:test{
 
 model:clearState()
 torch.save('./cnn_model', model)
+torch.save('./error_logs', error_logs)
 
 print("The End!")
