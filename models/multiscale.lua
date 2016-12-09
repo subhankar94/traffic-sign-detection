@@ -19,8 +19,9 @@ model:add(ContrastNorm(3, torch.ones(5,5)))
 model:add(Convolution(3, 12, 5, 5)) -- 12*36*36
 model:add(ReLU())
 model:add(Convolution(12, 16, 5, 5)) -- 12*32*32
-model:add(Subsample(16, 2, 2, 2, 2)) -- 16*16*16
+--model:add(Subsample(16, 2, 2, 2, 2)) -- 16*16*16
 model:add(ReLU())
+model:add(Max(2, 2, 2, 2))
 model:add(BatchNorm(16))
 model:add(Convolution(16, 32, 5, 5, 1, 1, 2, 2)) -- 32*16*16
 model:add(ReLU())

@@ -2,6 +2,7 @@ require 'torch'
 local tnt = require 'torchnet'
 local image = require 'image'
 local WIDTH, HEIGHT = 40, 40
+local DATA_PATH = './data/'
 
 function resize(img)
     return image.scale(img, WIDTH, HEIGHT)
@@ -33,7 +34,7 @@ end
 
 function getTestSample(dataset, idx)
     r = dataset[idx]
-    file = "./data/test_images/" .. string.format("%05d.ppm", r[1])
+    file = DATA_PATH .. "/test_images/" .. string.format("%05d.ppm", r[1])
     return transformInput(image.load(file))
 end
 
