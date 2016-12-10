@@ -18,7 +18,7 @@ local opt = optParser.parse(arg)
 local dbg = require "debugger"
 local utils = require 'utils'
 local DATA_PATH = (opt.data ~= '' and opt.data or './data/')
-local HEIGHT, WIDTH = 32, 32
+local HEIGHT, WIDTH = 48, 48
 
 torch.setdefaulttensortype('torch.DoubleTensor')
 
@@ -259,7 +259,7 @@ engine:test{
 }
 
 model:clearState()
-torch.save('./cnn_model', model)
-torch.save('./error_logs', error_logs)
+torch.save('./ts_model', model)
+torch.save('./error_logs_morecifar', error_logs)
 
 print("The End!")

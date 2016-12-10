@@ -19,7 +19,7 @@ local opt = optParser.parse(arg)
 local dbg = require "debugger"
 local utils = require 'utils'
 local DATA_PATH = (opt.data ~= '' and opt.data or './data/')
-local HEIGHT, WIDTH = 32, 32
+local HEIGHT, WIDTH = 48, 48
 
 torch.setdefaulttensortype('torch.DoubleTensor')
 
@@ -72,7 +72,9 @@ end
 
 function prune_dataset(data, trainData, epoch, maxepochs, largest, smallest)
     -- create dummy dataset that gradually approaches final distribution
-    local max = largest * ((maxepochs-epoch)/maxepochs)
+    -- max = smallest + (larges-smallest)*f(epoch)
+    --    where f(epoch) = (epoch-1)/(maxepochs-1)
+    local max = smallest + ((largest-smallest)*((epoch-1)/(maxepochs-1)))
     -- make list of images by class
     local indices = data.__dataset.__perm
     local by_class = {}
@@ -89,15 +91,18 @@ function prune_dataset(data, trainData, epoch, maxepochs, largest, smallest)
     pruned = {}
     for class, images in pairs(by_class) do
         
-        for idx, image in ipairs(images) do
-            table.insert(pruned, image)
-        end
-        
         local class_pop = #images
 
-        while class_pop < max do
-            table.insert(pruned, images[torch.random(#images)])
-            class_pop = class_pop + 1
+        if class_pop < max then
+            for idx, image in ipairs(images) do
+                table.insert(pruned, image)
+            end
+        else
+            local imgs_added = 0
+            while imgs_added < max do
+                table.insert(pruned, images[torch.random(#images)])
+                imgs_added = imgs_added + 1
+            end
         end
     end
     return pruned
@@ -192,9 +197,11 @@ engine.hooks.onForwardCriterion = function(state)
     timer:incUnit()
 end
 
+local error_logs = {}
 engine.hooks.onEnd = function(state)
     print(string.format("%s: avg. loss: %2.4f; avg. error: %2.4f, time: %2.4f",
     mode, meter:value(), clerr:value{k = 1}, timer:value()))
+    table.insert(error_logs, meter:value())
 end
 
 local epoch = 1
@@ -258,6 +265,7 @@ engine:test{
 }
 
 model:clearState()
-torch.save('./cnn_model', model)
+torch.save('./ts_model', model)
+torch.save('./error_logs_morecifar', error_logs)
 
 print("The End!")
