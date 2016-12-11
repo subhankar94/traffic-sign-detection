@@ -70,7 +70,6 @@ function getIterator(dataset, train, pruned, permed)
     return tnt.DatasetIterator{dataset = dset}
 end
 
-
 function prune_dataset(data, trainData, epoch, maxepochs, largest, smallest)
     -- create dummy dataset that gradually approaches final distribution
     -- max = smallest + (larges-smallest)*f(epoch)
