@@ -13,6 +13,7 @@
 \usepackage{pdflscape}
 \usepackage{fancyvrb}
 \usepackage{mathtools}
+\usepackage{hyperref}
 
 %\renewcommand{\baselinestretch}{1.5} 
 
@@ -30,20 +31,62 @@
 
 \subsection{Models Explored}
 
-I explored a number of papers for my model to g
-
-Sermanet, Pierre, and Yann LeCun. ``Traffic sign recognition with multi-scale convolutional networks." Neural Networks (IJCNN), The 2011 International Joint Conference on. IEEE, 2011.
-
-Szegedy, Christian, et al.``Going deeper with convolutions." Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. 2015.
+I explored a number of papers for techniques to use in my model. 
+I started by implementing the Inception submodules from Szegedy, et al. (2015) \footnote{Szegedy, Christian, et al.``Going deeper with convolutions." Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. 2015.}. 
+However, I found the performance gain minimal given the substantially longer forward pass time.\\
+I also referenced the work by Sermanet and LeCun (2011) \footnote{Sermanet, Pierre, and Yann LeCun. ``Traffic sign recognition with multi-scale convolutional networks." Neural Networks (IJCNN), The 2011 International Joint Conference on. IEEE, 2011.}. 
+I was unable to implement the jittering for preprocessing data and growing the dataset as attempts at doing so led to a decline in the performance of the network.
+The takeaway from the paper was to transform the image from RGB space to YUV space, and to use contrastive normalization, both of which indicated performance gains.\\
+Finally, I attempted to implement a spatial transformer network as described by Jardberg, et. al. (2015) \footnote{Jaderberg, Max, Karen Simonyan, and Andrew Zisserman. "Spatial transformer networks." Advances in Neural Information Processing Systems. 2015.} as it seemed a better alternative to the preprocessing described in the previous mentioned paper, but finding implementation tedious without the use of external packages decided to abandon the idea.\\
+Having tried much deeper and much wider architectures, I was surprised that the best performance came from the architecture below.
 
 \subsection{Final Model}
+Hosted at \url{http://cims.nyu.edu/~sg3697/ts_model}
+\begin{verbatim}
+	INPUT: 3*40*40
+  (1): nn.SpatialContrastiveNormalization
+  (2): nn.SpatialConvolutionMM(3 -> 12, 5x5)
+  (3): nn.ReLU
+  (4): nn.SpatialConvolutionMM(12 -> 16, 5x5)
+  (5): nn.SpatialSubSampling
+  (6): nn.ReLU
+  (7): nn.SpatialBatchNormalization
+  (8): nn.SpatialConvolutionMM(16 -> 32, 5x5, 1,1, 2,2)
+  (9): nn.ReLU
+  (10): nn.SpatialConvolutionMM(32 -> 64, 5x5, 1,1, 2,2)
+  (11): nn.SpatialSubSampling
+  (12): nn.ReLU
+  (13): nn.View(4096)
+  (14): nn.Dropout(0.300000)
+  (15): nn.Linear(4096 -> 100)
+  (16): nn.ReLU
+  (17): nn.Linear(100 -> 100)
+  (18): nn.ReLU
+  (19): nn.Linear(100 -> 43) 
+  
+\end{verbatim}
+
+
+\begin{center}
+\includegraphics[width=0.75\linewidth]{convergence}\\
+Graph of Loss against Training Epoch
+\end{center}
+The final model led to a roughly 1\% improvement in accuracy on the test set from the baseline model provided.
 
 \section{Computation}
 
+Each forward pass involved roughly $23\times10^6$ floating point computations.
+
 \subsection{GPU}
+The use of the GPU almost halved the compute time required for each pass. However, as the tests were run on shared machines with other jobs simultaneously using the GPUs, it isn't clear what the full potential for improved run times was.
 
 \subsection{Iterators}
 
+The ParallelIterator shaved off about 200ms from each pass of the training, dropping from about 650ms to about 450ms.
+
 \section{Data Distribution}
+
+As the class distribution was uneven, the dataset was rebalanced at every epoch to make the distribution gradually approach the true distribution. 
+This rebalancing led to nearly 1\% improvement in accuracy on the test set.
 
 \end{document}
