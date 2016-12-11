@@ -14,24 +14,22 @@ local BatchNorm = nn.SpatialBatchNormalization
 
 local model = nn.Sequential()
 
--- input : 3*32*32
--- model:add(ContrastNorm(3, torch.ones(5,5)))
--- model:add(Convolution(3, 128, 5, 5, 1, 1, 2, 2)) -- 128*32*32
--- model:add(ReLU())
-model:add(Convolution(3, 256, 5, 5, 1, 1, 2, 2)) -- 256*32*32
---model:add(Subsample(16, 2, 2, 2, 2)) -- 16*16*16
+-- input: 3*40*40
+model:add(ContrastNorm(3, torch.ones(5,5)))
+model:add(Convolution(3, 12, 5, 5)) -- 12*36*36
 model:add(ReLU())
-model:add(Max(2, 2, 2, 2)) -- 256*16*16
-model:add(BatchNorm(256))
-model:add(Convolution(256, 512, 5, 5, 1, 1, 2, 2)) -- 512*16*16
+model:add(Convolution(12, 16, 5, 5)) -- 12*32*32
+model:add(Subsample(16, 2, 2, 2, 2)) -- 16*16*16
 model:add(ReLU())
-model:add(Max(2, 2, 2, 2)) -- 512*8*8
-model:add(Convolution(512, 1024, 5, 5)) -- 1024*4*4
-model:add(Subsample(1024, 2, 2, 2, 2)) -- 1024*2*2
+model:add(BatchNorm(16))
+model:add(Convolution(16, 32, 5, 5, 1, 1, 2, 2)) -- 32*16*16
 model:add(ReLU())
-model:add(View(1024*2*2))
-model:add(Dropout(0.4))
-model:add(Linear(4096, 100))
+model:add(Convolution(32, 64, 5, 5, 1, 1, 2, 2)) -- 64*16*16
+model:add(Subsample(64, 2, 2, 2, 2)) -- 64*8*8
+model:add(ReLU())
+model:add(View(64*8*8))
+model:add(Dropout(0.3))
+model:add(Linear(64*8*8, 100))
 model:add(ReLU())
 model:add(Linear(100, 100))
 model:add(ReLU())

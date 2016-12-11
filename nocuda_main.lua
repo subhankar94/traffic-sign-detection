@@ -18,7 +18,7 @@ local opt = optParser.parse(arg)
 local dbg = require "debugger"
 local utils = require 'utils'
 local DATA_PATH = (opt.data ~= '' and opt.data or './data/')
-local HEIGHT, WIDTH = 48, 48
+local HEIGHT, WIDTH = 40, 40
 
 torch.setdefaulttensortype('torch.DoubleTensor')
 
