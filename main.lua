@@ -19,7 +19,7 @@ local opt = optParser.parse(arg)
 local dbg = require "debugger"
 local utils = require 'utils'
 local DATA_PATH = (opt.data ~= '' and opt.data or './data/')
-local HEIGHT, WIDTH = 48, 48
+local HEIGHT, WIDTH = 40, 40
 
 torch.setdefaulttensortype('torch.DoubleTensor')
 
@@ -70,6 +70,7 @@ function getIterator(dataset, train, pruned, permed)
     return tnt.DatasetIterator{dataset = dset}
 end
 
+
 function prune_dataset(data, trainData, epoch, maxepochs, largest, smallest)
     -- create dummy dataset that gradually approaches final distribution
     -- max = smallest + (larges-smallest)*f(epoch)
@@ -90,16 +91,15 @@ function prune_dataset(data, trainData, epoch, maxepochs, largest, smallest)
     -- build dummy dataset
     pruned = {}
     for class, images in pairs(by_class) do
-        
         local class_pop = #images
 
-        if class_pop < max then
+        if class_pop <= 2*max then
             for idx, image in ipairs(images) do
                 table.insert(pruned, image)
             end
         else
             local imgs_added = 0
-            while imgs_added < max do
+            while imgs_added <= 2*max do
                 table.insert(pruned, images[torch.random(#images)])
                 imgs_added = imgs_added + 1
             end
@@ -143,7 +143,6 @@ testDataset = tnt.ListDataset{
         }
     end
 }
-
 
 local model = require("models/".. opt.model)
 model:cuda()

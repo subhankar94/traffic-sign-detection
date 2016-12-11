@@ -1,7 +1,7 @@
 require 'torch'
 local tnt = require 'torchnet'
 local image = require 'image'
-local WIDTH, HEIGHT = 48, 48
+local WIDTH, HEIGHT = 40, 40
 local DATA_PATH = './data/'
 
 function resize(img)
